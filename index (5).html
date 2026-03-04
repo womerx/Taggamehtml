@@ -1,0 +1,901 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>TAG! – 3D Multiplayer</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow:wght@400;600;700&display=swap');
+
+  :root {
+    --bg: #0a0a0f;
+    --panel: #12121a;
+    --border: #2a2a3a;
+    --accent: #ff3b3b;
+    --accent2: #ff8c00;
+    --safe: #00e5ff;
+    --text: #e8e8f0;
+    --muted: #888899;
+    --glow: 0 0 20px rgba(255,59,59,0.4);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Barlow', sans-serif; overflow: hidden; height: 100vh; }
+
+  #canvas-container { position: fixed; inset: 0; z-index: 0; }
+  canvas { display: block; }
+
+  /* ======= SCREENS ======= */
+  .screen {
+    position: fixed; inset: 0; z-index: 10;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(10,10,15,0.92); backdrop-filter: blur(8px);
+    transition: opacity 0.4s;
+  }
+  .screen.hidden { opacity: 0; pointer-events: none; }
+
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 36px 40px;
+    width: 480px;
+    max-width: 95vw;
+    box-shadow: 0 0 60px rgba(0,0,0,0.8), inset 0 1px 0 rgba(255,255,255,0.05);
+  }
+
+  .logo {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 72px;
+    letter-spacing: 4px;
+    line-height: 1;
+    text-align: center;
+    background: linear-gradient(135deg, #ff3b3b, #ff8c00);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    margin-bottom: 6px;
+  }
+  .tagline { text-align: center; color: var(--muted); font-size: 13px; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 32px; }
+
+  label { display: block; font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+  input[type=text] {
+    width: 100%; padding: 12px 16px; background: rgba(255,255,255,0.05);
+    border: 1px solid var(--border); border-radius: 8px; color: var(--text);
+    font-family: 'Barlow', sans-serif; font-size: 15px; outline: none;
+    transition: border-color 0.2s;
+    margin-bottom: 20px;
+  }
+  input[type=text]:focus { border-color: var(--accent); }
+  input[type=text]::placeholder { color: var(--muted); }
+
+  .color-grid {
+    display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 24px;
+  }
+  .color-swatch {
+    width: 36px; height: 36px; border-radius: 50%; cursor: pointer;
+    border: 3px solid transparent; transition: all 0.2s; position: relative;
+  }
+  .color-swatch.selected { border-color: white; transform: scale(1.2); box-shadow: 0 0 12px rgba(255,255,255,0.4); }
+
+  .tabs { display: flex; gap: 4px; margin-bottom: 24px; background: rgba(0,0,0,0.3); border-radius: 10px; padding: 4px; }
+  .tab {
+    flex: 1; padding: 10px; border: none; background: none; color: var(--muted);
+    font-family: 'Barlow', sans-serif; font-size: 13px; font-weight: 600;
+    letter-spacing: 1px; text-transform: uppercase; cursor: pointer; border-radius: 7px;
+    transition: all 0.2s;
+  }
+  .tab.active { background: var(--accent); color: white; }
+
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+
+  .btn {
+    width: 100%; padding: 14px; border: none; border-radius: 10px;
+    font-family: 'Bebas Neue', sans-serif; font-size: 22px; letter-spacing: 2px;
+    cursor: pointer; transition: all 0.2s; position: relative; overflow: hidden;
+  }
+  .btn-primary { background: linear-gradient(135deg, #ff3b3b, #cc1a1a); color: white; }
+  .btn-primary:hover { transform: translateY(-2px); box-shadow: var(--glow); }
+  .btn-secondary { background: rgba(255,255,255,0.07); color: var(--text); border: 1px solid var(--border); margin-top: 10px; }
+  .btn-secondary:hover { background: rgba(255,255,255,0.12); }
+  .btn-sm { width: auto; padding: 8px 18px; font-size: 14px; border-radius: 7px; font-family: 'Barlow', sans-serif; font-weight: 700; margin: 0; }
+
+  .lobby-list { max-height: 220px; overflow-y: auto; margin-bottom: 16px; }
+  .lobby-item {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 14px; border: 1px solid var(--border); border-radius: 8px;
+    margin-bottom: 8px; background: rgba(255,255,255,0.03); cursor: pointer;
+    transition: all 0.15s;
+  }
+  .lobby-item:hover { border-color: var(--accent); background: rgba(255,59,59,0.08); }
+  .lobby-item-name { font-weight: 600; font-size: 14px; }
+  .lobby-item-info { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .badge {
+    font-size: 11px; padding: 3px 8px; border-radius: 4px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .badge-waiting { background: rgba(0,229,255,0.15); color: var(--safe); }
+  .badge-playing { background: rgba(255,59,59,0.15); color: var(--accent); }
+
+  .empty-state { text-align: center; padding: 30px; color: var(--muted); font-size: 14px; }
+
+  /* ======= HUD ======= */
+  #hud {
+    position: fixed; z-index: 20; inset: 0; pointer-events: none;
+  }
+  #hud-status {
+    position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
+    background: rgba(10,10,15,0.85); border: 1px solid var(--border);
+    border-radius: 12px; padding: 10px 24px; text-align: center;
+    backdrop-filter: blur(8px); pointer-events: none;
+  }
+  #hud-status.it { border-color: var(--accent); box-shadow: var(--glow); }
+  #hud-status.safe { border-color: var(--safe); box-shadow: 0 0 20px rgba(0,229,255,0.3); }
+  #status-label {
+    font-family: 'Bebas Neue', sans-serif; font-size: 28px; letter-spacing: 3px;
+  }
+  #status-sub { font-size: 12px; color: var(--muted); letter-spacing: 1px; }
+
+  #player-list {
+    position: absolute; top: 20px; right: 20px;
+    background: rgba(10,10,15,0.8); border: 1px solid var(--border);
+    border-radius: 12px; padding: 14px 16px; min-width: 160px;
+    backdrop-filter: blur(8px);
+  }
+  #player-list-title { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
+  .pl-entry { display: flex; align-items: center; gap: 8px; margin-bottom: 7px; font-size: 13px; }
+  .pl-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .pl-name { flex: 1; }
+  .pl-it { font-size: 10px; color: var(--accent); font-weight: 700; }
+
+  #controls-hint {
+    position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+    background: rgba(10,10,15,0.75); border: 1px solid var(--border);
+    border-radius: 10px; padding: 8px 20px; font-size: 12px; color: var(--muted);
+    letter-spacing: 0.5px; backdrop-filter: blur(8px); text-align: center;
+  }
+
+  #tag-flash {
+    position: fixed; inset: 0; z-index: 100; pointer-events: none;
+    background: rgba(255,59,59,0.35);
+    opacity: 0; transition: opacity 0.1s;
+  }
+
+  #lobby-waiting {
+    position: fixed; z-index: 50; bottom: 20px; left: 50%; transform: translateX(-50%);
+    background: rgba(10,10,15,0.9); border: 1px solid var(--safe);
+    border-radius: 12px; padding: 12px 28px; text-align: center;
+    backdrop-filter: blur(8px); font-size: 14px;
+    box-shadow: 0 0 20px rgba(0,229,255,0.2);
+    display: none;
+  }
+
+  #lobby-waiting.visible { display: block; }
+  #leave-btn {
+    position: fixed; top: 20px; left: 20px; z-index: 20;
+    pointer-events: all; display: none;
+  }
+
+  .toast {
+    position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%);
+    background: rgba(255,59,59,0.9); color: white; padding: 10px 24px;
+    border-radius: 30px; font-size: 13px; font-weight: 600; z-index: 200;
+    opacity: 0; transition: opacity 0.3s; pointer-events: none;
+  }
+  .toast.show { opacity: 1; }
+
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+</style>
+</head>
+<body>
+
+<div id="canvas-container"></div>
+<div id="tag-flash"></div>
+
+<!-- MENU SCREEN -->
+<div class="screen" id="screen-menu">
+  <div class="panel">
+    <div class="logo">TAG!</div>
+    <div class="tagline">3D Multiplayer Madness</div>
+
+    <label>Your Name</label>
+    <input type="text" id="input-name" placeholder="Enter your name..." maxlength="16"/>
+
+    <label>Pick Color</label>
+    <div class="color-grid" id="color-grid"></div>
+
+    <div class="tabs">
+      <button class="tab active" data-tab="create">Create</button>
+      <button class="tab" data-tab="browse">Browse</button>
+      <button class="tab" data-tab="join">Join Code</button>
+    </div>
+
+    <div class="tab-content active" id="tab-create">
+      <label>Lobby Name</label>
+      <input type="text" id="input-lobby-name" placeholder="My Lobby..." maxlength="24"/>
+      <button class="btn btn-primary" id="btn-create">CREATE LOBBY</button>
+    </div>
+
+    <div class="tab-content" id="tab-browse">
+      <div class="lobby-list" id="lobby-list">
+        <div class="empty-state">Loading lobbies...</div>
+      </div>
+      <button class="btn btn-secondary" id="btn-refresh">↻ Refresh</button>
+    </div>
+
+    <div class="tab-content" id="tab-join">
+      <label>Lobby Code</label>
+      <input type="text" id="input-lobby-code" placeholder="ABC123" maxlength="6" style="text-transform:uppercase"/>
+      <button class="btn btn-primary" id="btn-join-code">JOIN LOBBY</button>
+    </div>
+
+    <div id="server-status" style="margin-top:16px;text-align:center;font-size:12px;color:var(--muted)">
+      Connecting to server...
+    </div>
+  </div>
+</div>
+
+<!-- HUD (shown in-game) -->
+<div id="hud" style="display:none">
+  <div id="hud-status">
+    <div id="status-label">WAITING...</div>
+    <div id="status-sub">Waiting for players</div>
+  </div>
+  <div id="player-list">
+    <div id="player-list-title">Players</div>
+    <div id="pl-entries"></div>
+  </div>
+  <div id="controls-hint">WASD / Arrow Keys · Move &nbsp;|&nbsp; Get close to TAG!</div>
+</div>
+
+<button class="btn btn-secondary btn-sm" id="leave-btn" style="pointer-events:all">← Leave</button>
+<div id="lobby-waiting">⏳ Waiting for another player to join... <span id="lobby-code-display"></span></div>
+<div class="toast" id="toast"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+<script>
+// ============================================================
+// CONFIG — Change SERVER_URL to your Railway deployment URL
+// ============================================================
+const SERVER_URL = 'https://your-railway-app.up.railway.app';
+// ============================================================
+
+const COLORS = [
+  '#ff3b3b','#ff8c00','#ffd600','#4cff72',
+  '#00e5ff','#448aff','#e040fb','#ffffff',
+  '#ff6b9d','#69f0ae'
+];
+
+// ---- State ----
+let socket, scene, camera, renderer, playerMeshes = {}, myId = null;
+let myLobbyId = null, myPlayer = null, allPlayers = {};
+let taggerId = null, gameStarted = false;
+let keys = {}, clock;
+let myColor = COLORS[0];
+let nameStr = '';
+
+// ---- Init Three.js ----
+function initThree() {
+  scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x0a0a14);
+  scene.fog = new THREE.Fog(0x0a0a14, 30, 80);
+
+  camera = new THREE.PerspectiveCamera(70, innerWidth / innerHeight, 0.1, 200);
+  camera.position.set(0, 8, 12);
+
+  renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setSize(innerWidth, innerHeight);
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.2;
+  document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+  // Lighting
+  const amb = new THREE.AmbientLight(0x202030, 1.5);
+  scene.add(amb);
+
+  const sun = new THREE.DirectionalLight(0xfff5e0, 3);
+  sun.position.set(15, 25, 10);
+  sun.castShadow = true;
+  sun.shadow.mapSize.set(2048, 2048);
+  sun.shadow.camera.near = 0.5;
+  sun.shadow.camera.far = 100;
+  sun.shadow.camera.left = -40; sun.shadow.camera.right = 40;
+  sun.shadow.camera.top = 40; sun.shadow.camera.bottom = -40;
+  scene.add(sun);
+
+  const fill = new THREE.DirectionalLight(0x304060, 1);
+  fill.position.set(-10, 10, -10);
+  scene.add(fill);
+
+  const point1 = new THREE.PointLight(0xff3b3b, 2, 20);
+  point1.position.set(0, 3, 0);
+  scene.add(point1);
+
+  buildArena();
+  clock = new THREE.Clock();
+  window.addEventListener('resize', () => {
+    camera.aspect = innerWidth / innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(innerWidth, innerHeight);
+  });
+}
+
+function buildArena() {
+  // Ground
+  const groundGeo = new THREE.PlaneGeometry(60, 60, 20, 20);
+  const groundMat = new THREE.MeshStandardMaterial({
+    color: 0x1a1a2e,
+    roughness: 0.95,
+    metalness: 0.05
+  });
+  const ground = new THREE.Mesh(groundGeo, groundMat);
+  ground.rotation.x = -Math.PI / 2;
+  ground.receiveShadow = true;
+  scene.add(ground);
+
+  // Grid lines
+  const gridHelper = new THREE.GridHelper(60, 30, 0x2a2a4a, 0x1e1e35);
+  gridHelper.position.y = 0.01;
+  scene.add(gridHelper);
+
+  // Boundary walls (invisible but visual)
+  const wallMat = new THREE.MeshStandardMaterial({ color: 0x2a2a4a, roughness: 0.8, transparent: true, opacity: 0.6 });
+  const wallGeo = new THREE.BoxGeometry(60, 3, 0.5);
+  [
+    { pos: [0, 1.5, -30], rot: 0 },
+    { pos: [0, 1.5, 30], rot: 0 },
+    { pos: [-30, 1.5, 0], rot: Math.PI / 2 },
+    { pos: [30, 1.5, 0], rot: Math.PI / 2 }
+  ].forEach(({ pos, rot }) => {
+    const wall = new THREE.Mesh(wallGeo, wallMat);
+    wall.position.set(...pos);
+    wall.rotation.y = rot;
+    wall.castShadow = true;
+    wall.receiveShadow = true;
+    scene.add(wall);
+  });
+
+  // Scatter obstacles
+  const obsMat = new THREE.MeshStandardMaterial({ color: 0x3a3a5a, roughness: 0.7, metalness: 0.2 });
+  const positions = [
+    [8, 0, 8], [-8, 0, 8], [8, 0, -8], [-8, 0, -8],
+    [16, 0, 0], [-16, 0, 0], [0, 0, 16], [0, 0, -16],
+    [12, 0, -14], [-12, 0, 14]
+  ];
+  const shapes = [
+    new THREE.BoxGeometry(2, 2, 2),
+    new THREE.CylinderGeometry(1, 1, 3, 8),
+    new THREE.BoxGeometry(3, 1.5, 1.5),
+  ];
+  positions.forEach(([x, _, z]) => {
+    const geo = shapes[Math.floor(Math.random() * shapes.length)];
+    const mesh = new THREE.Mesh(geo, obsMat.clone());
+    mesh.position.set(x, 0.75, z);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    scene.add(mesh);
+  });
+
+  // Stars
+  const starsGeo = new THREE.BufferGeometry();
+  const starVerts = [];
+  for (let i = 0; i < 1000; i++) {
+    starVerts.push((Math.random() - 0.5) * 200, Math.random() * 80 + 5, (Math.random() - 0.5) * 200);
+  }
+  starsGeo.setAttribute('position', new THREE.Float32BufferAttribute(starVerts, 3));
+  const starsMat = new THREE.PointsMaterial({ color: 0xffffff, size: 0.15, sizeAttenuation: true });
+  scene.add(new THREE.Points(starsGeo, starsMat));
+}
+
+// ---- Character creation ----
+function makeCharacter(color, isTagged) {
+  const group = new THREE.Group();
+
+  // Body
+  const bodyMat = getPlayerMaterial(color, isTagged);
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.4, 1.0, 8), bodyMat);
+  body.position.y = 0.5;
+  body.castShadow = true;
+  group.add(body);
+
+  // Head
+  const headMat = getPlayerMaterial(color, isTagged);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.32, 12, 10), headMat);
+  head.position.y = 1.25;
+  head.castShadow = true;
+  group.add(head);
+
+  // Eyes
+  const eyeMat = new THREE.MeshStandardMaterial({ color: 0x000000, roughness: 0.5 });
+  [-0.12, 0.12].forEach(ex => {
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 8), eyeMat);
+    eye.position.set(ex, 1.28, 0.27);
+    group.add(eye);
+  });
+
+  // Legs
+  const legMat = new THREE.MeshStandardMaterial({ color: 0x222233, roughness: 0.8 });
+  [-0.18, 0.18].forEach(lx => {
+    const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.10, 0.6, 6), legMat);
+    leg.position.set(lx, -0.3, 0);
+    leg.castShadow = true;
+    group.add(leg);
+
+    // Feet
+    const foot = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.1, 0.3), legMat);
+    foot.position.set(lx, -0.62, 0.05);
+    group.add(foot);
+  });
+
+  // Arms
+  const armMat = getPlayerMaterial(color, isTagged);
+  [-0.6, 0.6].forEach(ax => {
+    const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.09, 0.7, 6), armMat);
+    arm.position.set(ax, 0.55, 0);
+    arm.rotation.z = ax > 0 ? -0.4 : 0.4;
+    arm.castShadow = true;
+    group.add(arm);
+  });
+
+  // IT crown
+  if (isTagged) {
+    const crownMat = new THREE.MeshStandardMaterial({ color: 0xff3b3b, emissive: 0xff0000, emissiveIntensity: 0.8, roughness: 0.3 });
+    for (let i = 0; i < 5; i++) {
+      const spike = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.22, 5), crownMat);
+      const angle = (i / 5) * Math.PI * 2;
+      spike.position.set(Math.cos(angle) * 0.22, 1.62, Math.sin(angle) * 0.22);
+      group.add(spike);
+    }
+    // Glow
+    const glow = new THREE.PointLight(0xff3b3b, 2, 3);
+    glow.position.y = 1;
+    group.add(glow);
+  }
+
+  // Name tag handled separately
+  group.userData.isTagged = isTagged;
+  return group;
+}
+
+function getPlayerMaterial(color, isTagged) {
+  if (isTagged) {
+    return new THREE.MeshStandardMaterial({
+      color: 0xff0000,
+      roughness: 1.0,
+      metalness: 0.0,
+      bumpMap: createRockTexture(),
+      bumpScale: 0.08,
+      envMapIntensity: 0
+    });
+  }
+  return new THREE.MeshStandardMaterial({
+    color: new THREE.Color(color),
+    roughness: 0.4,
+    metalness: 0.3
+  });
+}
+
+function createRockTexture() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 64; canvas.height = 64;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#888';
+  ctx.fillRect(0, 0, 64, 64);
+  for (let i = 0; i < 200; i++) {
+    ctx.fillStyle = `rgba(0,0,0,${Math.random() * 0.5})`;
+    ctx.beginPath();
+    ctx.arc(Math.random() * 64, Math.random() * 64, Math.random() * 3, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  const tex = new THREE.CanvasTexture(canvas);
+  return tex;
+}
+
+function updateCharacterAppearance(group, color, isTagged) {
+  // Rebuild materials
+  group.traverse(child => {
+    if (child.isMesh) {
+      const m = child.material;
+      if (m && m.color) {
+        if (isTagged && child.geometry.type !== 'SphereGeometry') {
+          child.material = getPlayerMaterial(color, true);
+        } else if (!isTagged) {
+          if (child.geometry.type !== 'BoxGeometry' || child.position.y > 0) {
+            // skip legs/feet
+          }
+          child.material = getPlayerMaterial(color, false);
+        }
+      }
+    }
+  });
+}
+
+function spawnPlayer(id, player) {
+  if (playerMeshes[id]) {
+    scene.remove(playerMeshes[id]);
+  }
+  const mesh = makeCharacter(player.color, player.isTagged);
+  mesh.position.set(player.x, player.y, player.z);
+  scene.add(mesh);
+  playerMeshes[id] = mesh;
+
+  // Floating name label
+  addNameLabel(mesh, player.name, id === myId);
+}
+
+function addNameLabel(group, name, isMe) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 256; canvas.height = 64;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, 256, 64);
+  ctx.fillStyle = isMe ? '#ffd600' : 'white';
+  ctx.font = 'bold 28px Barlow, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(name, 128, 42);
+
+  const tex = new THREE.CanvasTexture(canvas);
+  const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false });
+  const sprite = new THREE.Sprite(mat);
+  sprite.scale.set(2, 0.5, 1);
+  sprite.position.y = 2.0;
+  group.add(sprite);
+  group.userData.nameSprite = sprite;
+}
+
+// ---- Socket.io ----
+function initSocket() {
+  socket = io(SERVER_URL, { transports: ['websocket', 'polling'] });
+
+  socket.on('connect', () => {
+    document.getElementById('server-status').innerHTML = '🟢 Connected to server';
+    document.getElementById('server-status').style.color = '#4cff72';
+    socket.emit('getLobbies');
+  });
+
+  socket.on('connect_error', () => {
+    document.getElementById('server-status').innerHTML = '🔴 Cannot reach server. Check SERVER_URL in code.';
+    document.getElementById('server-status').style.color = '#ff3b3b';
+  });
+
+  socket.on('lobbiesList', (list) => {
+    renderLobbyList(list);
+  });
+
+  socket.on('joinedLobby', ({ lobbyId, player, lobby }) => {
+    myLobbyId = lobbyId;
+    myId = socket.id;
+    myPlayer = player;
+    allPlayers = lobby.players;
+
+    showGame();
+    Object.values(allPlayers).forEach(p => spawnPlayer(p.id, p));
+    updateHUD();
+
+    if (Object.keys(allPlayers).length < 2) {
+      showWaiting(lobbyId);
+    }
+  });
+
+  socket.on('playerJoined', (player) => {
+    allPlayers[player.id] = player;
+    spawnPlayer(player.id, player);
+    updateHUD();
+    showToast(`${player.name} joined!`);
+    document.getElementById('lobby-waiting').classList.remove('visible');
+  });
+
+  socket.on('playerLeft', ({ id }) => {
+    if (playerMeshes[id]) {
+      scene.remove(playerMeshes[id]);
+      delete playerMeshes[id];
+    }
+    if (allPlayers[id]) {
+      showToast(`${allPlayers[id].name} left`);
+      delete allPlayers[id];
+    }
+    updateHUD();
+  });
+
+  socket.on('playerMoved', ({ id, x, y, z, rotY }) => {
+    if (allPlayers[id]) {
+      allPlayers[id].x = x; allPlayers[id].y = y;
+      allPlayers[id].z = z; allPlayers[id].rotY = rotY;
+    }
+    if (playerMeshes[id]) {
+      playerMeshes[id].position.set(x, y, z);
+      playerMeshes[id].rotation.y = rotY;
+    }
+  });
+
+  socket.on('gameStart', ({ taggerId: newTaggerId, players }) => {
+    gameStarted = true;
+    taggerId = newTaggerId;
+    allPlayers = players;
+    // Rebuild all characters with correct tagged state
+    Object.values(allPlayers).forEach(p => {
+      spawnPlayer(p.id, p);
+    });
+    updateHUD();
+    showToast(taggerId === myId ? "YOU'RE IT! Tag someone!" : `${allPlayers[taggerId]?.name} is IT!`);
+  });
+
+  socket.on('tagged', ({ newTaggerId, oldTaggerId, players }) => {
+    taggerId = newTaggerId;
+    allPlayers = players;
+    // Rebuild visuals
+    Object.values(allPlayers).forEach(p => {
+      spawnPlayer(p.id, p);
+    });
+    updateHUD();
+
+    if (newTaggerId === myId) {
+      flashScreen();
+      showToast("YOU WERE TAGGED! You're IT now!");
+    } else {
+      showToast(`${allPlayers[newTaggerId]?.name} is now IT!`);
+    }
+    myPlayer = allPlayers[myId];
+  });
+
+  socket.on('waitingForPlayers', () => {
+    gameStarted = false;
+    showWaiting(myLobbyId);
+  });
+
+  socket.on('error', (msg) => {
+    showToast('Error: ' + msg);
+  });
+}
+
+// ---- Game Loop ----
+const SPEED = 7;
+const BOUNDS = 28;
+
+function gameLoop() {
+  requestAnimationFrame(gameLoop);
+  if (!gameStarted || !myPlayer) {
+    renderer.render(scene, camera);
+    return;
+  }
+
+  const dt = Math.min(clock.getDelta(), 0.05);
+  let moved = false;
+  let dx = 0, dz = 0;
+
+  if (keys['w'] || keys['arrowup']) dz -= 1;
+  if (keys['s'] || keys['arrowdown']) dz += 1;
+  if (keys['a'] || keys['arrowleft']) dx -= 1;
+  if (keys['d'] || keys['arrowright']) dx += 1;
+
+  if (dx !== 0 || dz !== 0) {
+    const len = Math.sqrt(dx * dx + dz * dz);
+    dx /= len; dz /= len;
+    myPlayer.x = Math.max(-BOUNDS, Math.min(BOUNDS, myPlayer.x + dx * SPEED * dt));
+    myPlayer.z = Math.max(-BOUNDS, Math.min(BOUNDS, myPlayer.z + dz * SPEED * dt));
+    myPlayer.rotY = Math.atan2(dx, dz);
+    moved = true;
+
+    if (playerMeshes[myId]) {
+      playerMeshes[myId].position.set(myPlayer.x, myPlayer.y, myPlayer.z);
+      playerMeshes[myId].rotation.y = myPlayer.rotY;
+      // Walk animation
+      const t = Date.now() / 150;
+      playerMeshes[myId].children.forEach((c, i) => {
+        if (c.isMesh && (i === 3 || i === 4)) { // legs
+          c.rotation.x = Math.sin(t + i) * 0.4;
+        }
+      });
+    }
+
+    socket.emit('playerMove', { x: myPlayer.x, y: myPlayer.y, z: myPlayer.z, rotY: myPlayer.rotY });
+  }
+
+  // Camera follow
+  if (playerMeshes[myId]) {
+    const target = playerMeshes[myId].position;
+    camera.position.x += (target.x - camera.position.x + dx * 3) * 0.1;
+    camera.position.z += (target.z - camera.position.z + dz * 3 + 10) * 0.1;
+    camera.position.y += (10 - camera.position.y) * 0.05;
+    camera.lookAt(target.x, 1, target.z);
+  }
+
+  // Tag check: if I'm IT, check proximity
+  if (taggerId === myId && myPlayer) {
+    Object.entries(allPlayers).forEach(([pid, p]) => {
+      if (pid === myId) return;
+      const dist = Math.sqrt((p.x - myPlayer.x) ** 2 + (p.z - myPlayer.z) ** 2);
+      if (dist < 1.8) {
+        socket.emit('tagPlayer', { targetId: pid });
+      }
+    });
+  }
+
+  // Bob IT player
+  if (playerMeshes[taggerId]) {
+    playerMeshes[taggerId].position.y = Math.sin(Date.now() / 300) * 0.08 + 0.5;
+  }
+
+  renderer.render(scene, camera);
+}
+
+// ---- UI Helpers ----
+function showGame() {
+  document.getElementById('screen-menu').classList.add('hidden');
+  document.getElementById('hud').style.display = 'block';
+  document.getElementById('leave-btn').style.display = 'block';
+}
+
+function showMenu() {
+  document.getElementById('screen-menu').classList.remove('hidden');
+  document.getElementById('hud').style.display = 'none';
+  document.getElementById('leave-btn').style.display = 'none';
+  document.getElementById('lobby-waiting').classList.remove('visible');
+  // cleanup
+  Object.keys(playerMeshes).forEach(id => scene.remove(playerMeshes[id]));
+  playerMeshes = {};
+  allPlayers = {};
+  myPlayer = null;
+  gameStarted = false;
+  taggerId = null;
+  socket.emit('getLobbies');
+}
+
+function showWaiting(lobbyId) {
+  const el = document.getElementById('lobby-waiting');
+  el.classList.add('visible');
+  document.getElementById('lobby-code-display').textContent = `Code: ${lobbyId}`;
+}
+
+function updateHUD() {
+  const isIt = taggerId === myId;
+  const statusEl = document.getElementById('hud-status');
+  const labelEl = document.getElementById('status-label');
+  const subEl = document.getElementById('status-sub');
+
+  if (!gameStarted) {
+    statusEl.className = '';
+    labelEl.textContent = 'WAITING...';
+    subEl.textContent = 'Waiting for players to join';
+  } else if (isIt) {
+    statusEl.className = 'it';
+    labelEl.style.color = '#ff3b3b';
+    labelEl.textContent = "YOU'RE IT!";
+    subEl.textContent = 'Chase and tag another player!';
+  } else {
+    statusEl.className = 'safe';
+    labelEl.style.color = '#00e5ff';
+    labelEl.textContent = 'RUN!';
+    const taggerName = allPlayers[taggerId]?.name || '?';
+    subEl.textContent = `${taggerName} is chasing you!`;
+  }
+
+  // Player list
+  const entries = document.getElementById('pl-entries');
+  entries.innerHTML = '';
+  Object.values(allPlayers).forEach(p => {
+    const div = document.createElement('div');
+    div.className = 'pl-entry';
+    div.innerHTML = `
+      <div class="pl-dot" style="background:${p.id === taggerId ? '#ff3b3b' : p.color}"></div>
+      <div class="pl-name">${p.name}${p.id === myId ? ' (you)' : ''}</div>
+      ${p.id === taggerId ? '<div class="pl-it">IT</div>' : ''}
+    `;
+    entries.appendChild(div);
+  });
+}
+
+function renderLobbyList(list) {
+  const el = document.getElementById('lobby-list');
+  if (!list || list.length === 0) {
+    el.innerHTML = '<div class="empty-state">No lobbies found. Create one!</div>';
+    return;
+  }
+  el.innerHTML = '';
+  list.forEach(lobby => {
+    const div = document.createElement('div');
+    div.className = 'lobby-item';
+    div.innerHTML = `
+      <div>
+        <div class="lobby-item-name">${lobby.name}</div>
+        <div class="lobby-item-info">${lobby.playerCount}/6 players · Code: ${lobby.id}</div>
+      </div>
+      <span class="badge ${lobby.started ? 'badge-playing' : 'badge-waiting'}">${lobby.started ? 'Playing' : 'Waiting'}</span>
+    `;
+    div.onclick = () => doJoin(lobby.id);
+    el.appendChild(div);
+  });
+}
+
+function flashScreen() {
+  const el = document.getElementById('tag-flash');
+  el.style.opacity = '1';
+  setTimeout(() => { el.style.opacity = '0'; }, 300);
+}
+
+function showToast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 3000);
+}
+
+function validate() {
+  const name = document.getElementById('input-name').value.trim();
+  if (!name) { showToast('Enter your name!'); return null; }
+  return name;
+}
+
+function doJoin(lobbyId) {
+  const name = validate();
+  if (!name) return;
+  socket.emit('joinLobby', { lobbyId, playerName: name, playerColor: myColor });
+}
+
+// ---- Build color grid ----
+function buildColorGrid() {
+  const grid = document.getElementById('color-grid');
+  COLORS.forEach((c, i) => {
+    const sw = document.createElement('div');
+    sw.className = 'color-swatch' + (i === 0 ? ' selected' : '');
+    sw.style.background = c;
+    sw.onclick = () => {
+      document.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('selected'));
+      sw.classList.add('selected');
+      myColor = c;
+    };
+    grid.appendChild(sw);
+  });
+}
+
+// ---- Tab switching ----
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.onclick = () => {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+    if (tab.dataset.tab === 'browse') socket.emit('getLobbies');
+  };
+});
+
+// ---- Buttons ----
+document.getElementById('btn-create').onclick = () => {
+  const name = validate();
+  if (!name) return;
+  const lobbyName = document.getElementById('input-lobby-name').value.trim() || `${name}'s Lobby`;
+  socket.emit('createLobby', { lobbyName, playerName: name, playerColor: myColor });
+};
+
+document.getElementById('btn-join-code').onclick = () => {
+  const name = validate();
+  if (!name) return;
+  const code = document.getElementById('input-lobby-code').value.trim().toUpperCase();
+  if (!code) { showToast('Enter a lobby code!'); return; }
+  doJoin(code);
+};
+
+document.getElementById('btn-refresh').onclick = () => {
+  socket.emit('getLobbies');
+};
+
+document.getElementById('leave-btn').onclick = () => {
+  socket.emit('leaveLobby');
+  showMenu();
+};
+
+// ---- Keyboard ----
+window.addEventListener('keydown', e => { keys[e.key.toLowerCase()] = true; });
+window.addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
+
+// ---- Boot ----
+buildColorGrid();
+initThree();
+initSocket();
+gameLoop();
+</script>
+</body>
+</html>
