@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>TagiTopia</title>
+<title>TAG! – 3D Multiplayer</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow:wght@400;600;700&display=swap');
 
@@ -183,6 +183,8 @@
   }
   .toast.show { opacity: 1; }
 
+  .badge-private { background: rgba(228,183,0,0.15); color: #ffd600; }
+
   ::-webkit-scrollbar { width: 4px; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
@@ -209,6 +211,7 @@
       <button class="tab active" data-tab="create">Create</button>
       <button class="tab" data-tab="browse">Browse</button>
       <button class="tab" data-tab="join">Join Code</button>
+      <button class="tab" data-tab="private">🔒 Private</button>
     </div>
 
     <div class="tab-content active" id="tab-create">
@@ -228,6 +231,27 @@
       <label>Lobby Code</label>
       <input type="text" id="input-lobby-code" placeholder="ABC123" maxlength="6" style="text-transform:uppercase"/>
       <button class="btn btn-primary" id="btn-join-code">JOIN LOBBY</button>
+    </div>
+
+    <div class="tab-content" id="tab-private">
+      <div id="private-mode-toggle" style="display:flex;gap:8px;margin-bottom:18px;">
+        <button class="priv-mode-btn active" data-mode="create" style="flex:1;padding:9px;border:1px solid var(--border);border-radius:8px;background:rgba(255,59,59,0.15);color:var(--accent);font-family:Barlow,sans-serif;font-weight:700;font-size:13px;cursor:pointer;letter-spacing:1px;">CREATE PRIVATE</button>
+        <button class="priv-mode-btn" data-mode="join" style="flex:1;padding:9px;border:1px solid var(--border);border-radius:8px;background:transparent;color:var(--muted);font-family:Barlow,sans-serif;font-weight:700;font-size:13px;cursor:pointer;letter-spacing:1px;">JOIN PRIVATE</button>
+      </div>
+      <div id="priv-create-section">
+        <label>Lobby Name</label>
+        <input type="text" id="input-priv-lobby-name" placeholder="Secret Lobby..." maxlength="24"/>
+        <label>Password</label>
+        <input type="text" id="input-priv-password-create" placeholder="Set a password..." maxlength="20"/>
+        <button class="btn btn-primary" id="btn-create-private">🔒 CREATE PRIVATE LOBBY</button>
+      </div>
+      <div id="priv-join-section" style="display:none">
+        <label>Lobby Code</label>
+        <input type="text" id="input-priv-code" placeholder="ABC123" maxlength="6" style="text-transform:uppercase"/>
+        <label>Password</label>
+        <input type="text" id="input-priv-password-join" placeholder="Enter password..." maxlength="20"/>
+        <button class="btn btn-primary" id="btn-join-private">🔒 JOIN PRIVATE LOBBY</button>
+      </div>
     </div>
 
     <div id="server-status" style="margin-top:16px;text-align:center;font-size:12px;color:var(--muted)">
@@ -798,14 +822,26 @@ function renderLobbyList(list) {
   list.forEach(lobby => {
     const div = document.createElement('div');
     div.className = 'lobby-item';
+    const privBadge = lobby.isPrivate ? `<span class="badge badge-private">🔒 Private</span>` : '';
+    const statusBadge = `<span class="badge ${lobby.started ? 'badge-playing' : 'badge-waiting'}">${lobby.started ? 'Playing' : 'Waiting'}</span>`;
     div.innerHTML = `
       <div>
-        <div class="lobby-item-name">${lobby.name}</div>
+        <div class="lobby-item-name">${lobby.isPrivate ? '🔒 ' : ''}${lobby.name}</div>
         <div class="lobby-item-info">${lobby.playerCount}/6 players · Code: ${lobby.id}</div>
       </div>
-      <span class="badge ${lobby.started ? 'badge-playing' : 'badge-waiting'}">${lobby.started ? 'Playing' : 'Waiting'}</span>
+      <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end">${privBadge}${statusBadge}</div>
     `;
-    div.onclick = () => doJoin(lobby.id);
+    div.onclick = () => {
+      if (lobby.isPrivate) {
+        const pw = prompt(`🔒 "${lobby.name}" is password protected.\nEnter password:`);
+        if (pw === null) return;
+        const name = validate();
+        if (!name) return;
+        socket.emit('joinLobby', { lobbyId: lobby.id, playerName: name, playerColor: myColor, password: pw });
+      } else {
+        doJoin(lobby.id);
+      }
+    };
     el.appendChild(div);
   });
 }
@@ -834,6 +870,46 @@ function doJoin(lobbyId) {
   if (!name) return;
   socket.emit('joinLobby', { lobbyId, playerName: name, playerColor: myColor });
 }
+
+// ---- Private Lobby Mode Toggle ----
+document.querySelectorAll('.priv-mode-btn').forEach(btn => {
+  btn.onclick = () => {
+    document.querySelectorAll('.priv-mode-btn').forEach(b => {
+      b.style.background = 'transparent';
+      b.style.color = 'var(--muted)';
+      b.classList.remove('active');
+    });
+    btn.style.background = 'rgba(255,59,59,0.15)';
+    btn.style.color = 'var(--accent)';
+    btn.classList.add('active');
+    if (btn.dataset.mode === 'create') {
+      document.getElementById('priv-create-section').style.display = 'block';
+      document.getElementById('priv-join-section').style.display = 'none';
+    } else {
+      document.getElementById('priv-create-section').style.display = 'none';
+      document.getElementById('priv-join-section').style.display = 'block';
+    }
+  };
+});
+
+document.getElementById('btn-create-private').onclick = () => {
+  const name = validate();
+  if (!name) return;
+  const lobbyName = document.getElementById('input-priv-lobby-name').value.trim() || `${name}'s Private Lobby`;
+  const password = document.getElementById('input-priv-password-create').value.trim();
+  if (!password) { showToast('Set a password for your private lobby!'); return; }
+  socket.emit('createLobby', { lobbyName, playerName: name, playerColor: myColor, password, isPrivate: true });
+};
+
+document.getElementById('btn-join-private').onclick = () => {
+  const name = validate();
+  if (!name) return;
+  const code = document.getElementById('input-priv-code').value.trim().toUpperCase();
+  const password = document.getElementById('input-priv-password-join').value.trim();
+  if (!code) { showToast('Enter a lobby code!'); return; }
+  if (!password) { showToast('Enter the lobby password!'); return; }
+  socket.emit('joinLobby', { lobbyId: code, playerName: name, playerColor: myColor, password });
+};
 
 // ---- Build color grid ----
 function buildColorGrid() {
